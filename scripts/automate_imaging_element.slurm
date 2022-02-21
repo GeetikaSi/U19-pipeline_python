@@ -3,7 +3,7 @@
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=1
 #SBATCH --ntasks=1
-#SBATCH --time=01:00:00
+#SBATCH --time=03:00:00
 ##SBATCH --mem=15G
 #SBATCH --mail-user=geetika@datajoint.com
 #SBATCH --mail-type=end

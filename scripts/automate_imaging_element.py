@@ -28,6 +28,9 @@ recording_id = os.environ['recording_id']
 process_method = os.environ['process_method']
 paramset_idx = os.environ['paramset_idx']
 
+# recording_id = 13
+# process_method = 'caiman'
+# paramset_idx = 1
 # parameters = {
 #     'look_one_level_down': 0.0,
 #     'fast_disk': [],
@@ -97,7 +100,7 @@ paramset_idx = os.environ['paramset_idx']
 #                     'overlaps': (24, 24),       
 #                     'max_shifts': (6,6),         
 #                     'max_deviation_rigid': 3,     
-#                     'pw_rigid': True,             
+#                     'pw_rigid': False,             
 #                     'p': 1,                       
 #                     'gnb': 2,                    
 #                     'merge_thr': 0.85,            
@@ -158,46 +161,53 @@ for fov_key in (imaging_rec.FieldOfView & scan_key).fetch('KEY'):
     task_mode='trigger'
     if process_method == 'suite2p':
         print('SUITE2P METHOD SELECTED')
+        print(output_dir)
+        output_dir = output_dir / process_method
         if output_dir.exists():
             print('SUITE2P FOLDER FOUND!!!')
             # output_dir = get_suite2p_dir(scan_key)
             p = pathlib.Path(output_dir).glob('**/*')
             plane_filepaths = [x for x in p if x.is_dir()]
-            for plane_filepath in plane_filepaths:
-                ops_fp = plane_filepath / 'ops.npy'
-                iscell_fp = plane_filepath / 'iscell.npy'
-                if not ops_fp.exists() or not iscell_fp.exists():
-                    raise FileNotFoundError(
-                        'No "ops.npy" or "iscell.npy" found. Invalid suite2p plane folder: {}'.format(plane_filepath))
-                else:
-                    task_mode='load'
+            plane_filepaths = plane_filepaths[0]
+            print('PLANE FILEPATHS')
+            print(plane_filepaths)
+            ops_fp = plane_filepaths / 'ops.npy'
+            iscell_fp = plane_filepaths / 'iscell.npy'
+            if not ops_fp.exists() or not iscell_fp.exists():
+                raise FileNotFoundError(
+                    'No "ops.npy" or "iscell.npy" found. Invalid suite2p plane folder: {}'.format(plane_filepaths))
+            else:
+                task_mode='load'
         else:
             print('SUITE2P FOLDER NOT FOUND!!!')
             task_mode='trigger'
 
     elif process_method == 'caiman':
-        pass
-    #     _required_hdf5_fields = ['/motion_correction/reference_image',
-    #                             '/motion_correction/correlation_image',
-    #                             '/motion_correction/average_image',
-    #                             '/motion_correction/max_image',
-    #                             '/estimates/A']
-    # #TODO: Load Caiman output files
-    #     # pass
-    #     if not output_dir.exists():
-    #     # if not caiman_dir.exists():
-    #         print('CaImAn directory not found: {}'.format(output_dir))
+        print('CAIMAN METHOD SELECTED')
+        print('TASK MODE')
+        print(task_mode)
+        _required_hdf5_fields = ['/motion_correction/reference_image',
+                                '/motion_correction/correlation_image',
+                                '/motion_correction/average_image',
+                                '/motion_correction/max_image',
+                                '/estimates/A']
+        #TODO: Load Caiman output files
+        print('OUTPUT DIR')
+        print(output_dir)
+        if not output_dir.exists():
+            print('CaImAn directory not found: {}'.format(output_dir))
 
-    #     for fp in output_dir.glob('*.hdf5'):
-    #         task_mode='trigger'
-    #         with h5py.File(fp, 'r') as h5f:
-    #             if all(s in h5f for s in _required_hdf5_fields):
-    #                 caiman_fp = fp
-    #                 break
-    #     # else:
-    #     #     raise FileNotFoundError(
-    #     #         'No CaImAn analysis output file found at {}'
-    #     #         ' containg all required fields ({})'.format(output_dir[0], _required_hdf5_fields))
+        for fp in output_dir.glob('*.hdf5'):
+            with h5py.File(fp, 'r') as h5f:
+                if all(s in h5f for s in _required_hdf5_fields):
+                    caiman_fp = fp
+                    print('CAIMAN FP')
+                    print(caiman_fp)
+                    break
+        else:
+            raise FileNotFoundError(
+                'No CaImAn analysis output file found at {}'
+                ' containg all required fields ({})'.format(output_dir, _required_hdf5_fields))
     
     imaging_element.ProcessingTask.insert1(dict(**scan_key, 
                                                 paramset_idx=paramset_idx, 
