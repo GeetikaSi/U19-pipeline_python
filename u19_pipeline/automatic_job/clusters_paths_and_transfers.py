@@ -23,7 +23,7 @@ tiger_ep_dir = 'a9df83d2-42f0-11e6-80cf-22000b1701d1'
 
 
 tiger_home_dir = '/scratch/gpfs/BRAINCOGS'    
-spock_home_dir = '/usr/people/alvaros/BrainCogsProjects/ProcessJobsPipeline'
+spock_home_dir = '/usr/people/alvaros/BrainCogsProjects/Datajoint_projs/U19-pipeline_python'
 #Cluster directories
 cluster_vars = {
     "tiger": {
@@ -33,7 +33,8 @@ cluster_vars = {
         "slurm_files_dir": tiger_home_dir + "/slurm_files", 
         "log_files_dir":   tiger_home_dir + "/job_log", 
         "user":            default_user, 
-        "hostname":        'tigergpu.princeton.edu',
+        "hostname":        "tigergpu.princeton.edu",
+        "script_path":      ""
     },
     "spock": {
         "home_dir":        spock_home_dir, 
@@ -41,7 +42,8 @@ cluster_vars = {
         "slurm_files_dir": spock_home_dir + "/slurm_files", 
         "log_files_dir":   spock_home_dir + "/job_log", 
         "user":            default_user,
-        "hostname":        'spock.princeton.edu',
+        "hostname":        "spock.princeton.edu",
+        "script_path":      "scripts/automate_imaging_element.py"
     }
 }
 
