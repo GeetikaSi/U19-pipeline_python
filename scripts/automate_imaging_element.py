@@ -1,8 +1,11 @@
 from concurrent.futures import process
-import os 
+import os
+from re import T
+from turtle import down 
 import datajoint as dj
 import numpy as np
-from u19_pipeline import lab, imaging_rec, acquisition, subject, recording
+from sklearn import preprocessing
+from u19_pipeline import lab, imaging_rec, acquisition, subject, recording, downstream_analysis
 from u19_pipeline.imaging_element import imaging_element, scan_element, \
                                         get_processed_dir, Equipment,\
                                           get_imaging_root_data_dir, \
@@ -24,8 +27,9 @@ import h5py
 # session_number = 0
 
 acq_software = 'ScanImage'
+recording_process_id = 26
 #recording_id = os.environ['recording_id']
-recording_process_id = os.environ['recording_process_id']
+# recording_process_id = os.environ['recording_process_id']
 #process_method = os.environ['process_method']
 #paramset_idx = os.environ['paramset_idx']
 
@@ -129,7 +133,8 @@ rec_process_key = dict(recording_process_id=recording_process_id)
 rec_process_str_key = 'recording_process_id_'+str(recording_process_id)
 
 #Get fov key
-rec_process = (imaging_rec.ImagingProcessing & rec_process_key).fetch1()
+rec_process = (imaging_rec.ImagingProcessing & rec_process_key).fetch1() 
+#INFO: Table ImagingProcessing contains recording_process_id, recording_id and fov
 fov_key = rec_process.copy()
 fov_key.pop('recording_process_id')
 
@@ -139,7 +144,9 @@ recording_process_info = (lab.Location * recording.RecordingProcess * recording.
 
 
 #Paramset idx and key
-paramset_idx = recording_process_info[0]['process_paramset_idx']
+# paramset_idx = recording_process_info[0]['process_paramset_idx']
+# paramset_idx = os.environ['paramset_idx']
+paramset_idx = 0
 paramset_idx_key = dict()
 paramset_idx_key['paramset_idx'] = paramset_idx
 scanner = recording_process_info[0]['acquisition_type']
@@ -152,18 +159,22 @@ scan_id = 0
 preprocess_params_key = dict()
 preprocess_params_key['preprocess_paramset_idx'] = recording_process_info[0]['preprocess_paramset_idx']
 preprocess_params = recording.PreprocessParamSet().get_preprocess_params(preprocess_params_key)
-processing_method = preprocess_params['processing_method']
-task_mode      = preprocess_params['task_mode']
+# processing_method = preprocess_params['processing_method']
+# task_mode      = preprocess_params['task_mode']
+# processing_method = os.environ['process_method']
+# task_mode = os.environ['proce']
 
+task_mode = 'load'
+processing_method = 'suite2p'
 print('got processing_method', processing_method)
 print('got task_mode', task_mode)
-
 print('got paramset_idx', paramset_idx)
 
 
 #Get directories for kov
 scan_filepaths = get_scan_image_files(fov_key)
 scan_filepaths = scan_filepaths[:1]
+print('SCAN FILEPATHS')
 print(scan_filepaths)
 
 if rec_process_key not in scan_element.Scan():
@@ -197,13 +208,18 @@ recording_process_id_folder_found = True
 generic_process_folder_found = True
 # look firs for recording_process_id# directory
 relative_output_dir = (pathlib.Path(fov_directory) / rec_process_str_key).as_posix()
-output_dir = pathlib.Path(get_imaging_root_data_dir(), relative_output_dir)
+print('RELAtive output dir')
+print(relative_output_dir)
+
+output_dir = pathlib.Path('/usr/people/gs6614/temp_output/') / relative_output_dir
+print('OUTPUT DIR')
+print(output_dir)
 if not output_dir.exists():
+    print('FIRST IF')
     recording_process_id_folder_found = False
     # look for suite2p directory
     relative_output_dir = (pathlib.Path(fov_directory) / processing_method).as_posix()
-    output_dir = pathlib.Path(get_imaging_root_data_dir(), relative_output_dir)
-if not output_dir.exists():
+    # output_dir = pathlib.Path(get_imaging_root_data_dir(), relative_output_dir)
     generic_process_folder_found = False
 
 
@@ -212,20 +228,22 @@ if task_mode == 'load' and not generic_process_folder_found:
     FileNotFoundError(processing_method + ' FOLDER NOT FOUND cannot load results!!!')
 
 # Results from this specific recording_process_id already triggered
+if task_mode == 'load' and recording_process_id_folder_found:
+    print('Loading data from existing suite2p folder', output_dir)
+
+# Results from this specific recording_process_id already triggered
 if task_mode == 'trigger' and recording_process_id_folder_found:
     print('Overwritting process output from original processing folder', output_dir)
 
 #If trigger and not recording_process_id_folder_found make it
-if task_mode == 'trigger':
+if task_mode == 'trigger' and not recording_process_id_folder_found:
     relative_output_dir = (pathlib.Path(fov_directory) / rec_process_str_key).as_posix()
-    output_dir = pathlib.Path(get_imaging_root_data_dir(), relative_output_dir)
+    output_dir = pathlib.Path('/usr/people/gs6614/temp_output/')/ relative_output_dir
     output_dir.mkdir(parents=True,exist_ok=True)
-
 
 print('RELATIVE OUTPUT DIR')
 print(relative_output_dir)
 print(output_dir)
-#output_dir.mkdir(parents=True,exist_ok=True)
 
 #Check if found output dir is correct
 if task_mode == 'load':
@@ -234,6 +252,8 @@ if task_mode == 'load':
         # output_dir = get_suite2p_dir(scan_key)
         p = pathlib.Path(output_dir).glob('**/*')
         plane_filepaths = [x for x in p if x.is_dir()]
+        print(plane_filepaths)
+        print('PLANE FILEPATHS')
         for plane_filepath in plane_filepaths:
             ops_fp = plane_filepath / 'ops.npy'
             iscell_fp = plane_filepath / 'iscell.npy'
@@ -242,28 +262,28 @@ if task_mode == 'load':
                     'No "ops.npy" or "iscell.npy" found. Invalid suite2p plane folder: {}'.format(plane_filepath))
 
     elif processing_method == 'caiman':
-        raise ValueError("caiman not supported yet")
-#     _required_hdf5_fields = ['/motion_correction/reference_image',
-#                             '/motion_correction/correlation_image',
-#                             '/motion_correction/average_image',
-#                             '/motion_correction/max_image',
-#                             '/estimates/A']
-# #TODO: Load Caiman output files
-#     # pass
-#     if not output_dir.exists():
-#     # if not caiman_dir.exists():
-#         print('CaImAn directory not found: {}'.format(output_dir))
+        # raise ValueError("caiman not supported yet")
+        _required_hdf5_fields = ['/motion_correction/reference_image',
+                                '/motion_correction/correlation_image',
+                                '/motion_correction/average_image',
+                                '/motion_correction/max_image',
+                                '/estimates/A']
+        #TODO: Load Caiman output files
+        # pass
+        if not output_dir.exists():
+        # if not caiman_dir.exists():
+            print('CaImAn directory not found: {}'.format(output_dir))
 
-#     for fp in output_dir.glob('*.hdf5'):
-#         task_mode='trigger'
-#         with h5py.File(fp, 'r') as h5f:
-#             if all(s in h5f for s in _required_hdf5_fields):
-#                 caiman_fp = fp
-#                 break
-#     # else:
-#     #     raise FileNotFoundError(
-#     #         'No CaImAn analysis output file found at {}'
-#     #         ' containg all required fields ({})'.format(output_dir[0], _required_hdf5_fields))
+        for fp in output_dir.glob('*.hdf5'):
+            task_mode='trigger'
+            with h5py.File(fp, 'r') as h5f:
+                if all(s in h5f for s in _required_hdf5_fields):
+                    caiman_fp = fp
+                    break
+        else:
+            raise FileNotFoundError(
+                'No CaImAn analysis output file found at {}'
+                ' containg all required fields ({})'.format(output_dir, _required_hdf5_fields))
 
 
 if paramset_idx_key not in imaging_element.ProcessingParamSet():
@@ -280,11 +300,11 @@ if paramset_idx_key not in imaging_element.ProcessingParamSet():
 
     #Insert in imaging element equivalent ProcessParamSet
     imaging_element.ProcessingParamSet.insert_new_params(
-    processing_method=processing_method, paramset_idx=paramset_idx+1, paramset_desc=process_params_info[0]['process_paramset_desc'], params=process_params)
+    processing_method=processing_method, paramset_idx=paramset_idx, paramset_desc=process_params_info[0]['process_paramset_desc'], params=process_params)
 
 imaging_element.ProcessingTask.insert1(dict(**rec_process_key,
                                             scan_id=scan_id,
-                                            paramset_idx=paramset_idx+1, 
+                                            paramset_idx=paramset_idx, 
                                             processing_output_dir=relative_output_dir, 
                                             task_mode=task_mode), 
                                         skip_duplicates=True)
@@ -300,3 +320,5 @@ imaging_element.Segmentation.populate(rec_process_key, display_progress=True)
 
 imaging_element.Fluorescence.populate(rec_process_key, display_progress=True)
 imaging_element.Activity.populate(rec_process_key, display_progress=True)
+
+downstream_analysis.DownstreamActivityAnalysis.populate(rec_process_key, display_progress=True)
